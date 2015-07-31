@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link type="text/css" rel="stylesheet" href="colorbrewer.css"/>
+<link type="text/css" rel="stylesheet" href="style.css"/>
+<body>
+<div id="pieChart"></div>
+<div id="barChart"></div>
+<script src="d3.v2.min.js"></script>
+<script src="jquery.1.8.3.js"></script>
+<script src="underscore.min.js"></script>
+<script src="backbone.min.js"></script>
+<script src="data.js"></script>
+<script src="colorbrewer.js"></script>
+<script>
+
+  // ************* common model
+  var ChartModel = Backbone.Model.extend({
+    defaults: {
+        data: ''
+    },
+    initialize: function(){
+        this.set('data', data)
+    }
+  });
+
+  var chartModel = new ChartModel();
+
+  // ************* Pie Chart View
+  var PieChart = Backbone.View.extend({
+    "el": "#pieChart",
+    defaults: {
+        margin: {top: 40, right: 700, bottom: 40, left: 40},
+        width: 960,
+        height: 300
+    },
+    initialize: function() {
+	    this.render();
+    },
+    render: function() {
+        var radius = Math.min(this.defaults.width, this.defaults.height) / 2;
+
+        var color = d3.scale.ordinal()
+            .range(["#98abc5", "#8a89a6", "#7b6888", "#6b486b", "#a05d56", "#d0743c", "#ff8c00"]);
+
+        var arc = d3.svg.arc()
+            .outerRadius(radius - 10)
+            .innerRadius(0);
+
+        var pie = d3.layout.pie()
+            .sort(null)
+            .value(function(d) { return d.frequency; });
+
+        var svg = d3.select(this.el).append("svg")
+            .attr("width", this.defaults.width)
+            .attr("height", this.defaults.height)
+        .append("g")
+            .attr("transform", "translate(" + this.defaults.width / 2 + "," + this.defaults.height / 2 + ")");
+
+        //Common Model is used
+        chartModel.get('data').forEach(function(d) {
+            d.frequency = +d.frequency;
+        });
+
+        var g = svg.selectAll(".arc")
+            .data(pie(chartModel.get('data')))
+        .enter().append("g")
+            .attr("class", "arc");
+
+        g.append("path")
+            .attr("d", arc)
+            .transition().delay(function (d,i){ return i * 300;}).duration(300)
+            .style("fill", function(d) { return color(d.data.length); });
+
+        g.append("text")
+            .attr("transform", function(d) { return "translate(" + arc.centroid(d) + ")"; })
+            .attr("dy", ".35em")
+            .style("text-anchor", "middle")
+            .transition().delay(function (d,i){ return i * 300;}).duration(300)
+            .text(function(d) { return d.data.length; });
+    }
+  });
+
+
+  // ************* Bar Chart View
+  var BarChart = Backbone.View.extend({
+    el: "#barChart",
+    defaults: {
+        margin: {top: 20, right: 20, bottom: 30, left: 40},
+        width: 960,
+        height: 500
+    },
+    initialize: function() {
+	    this.render();
+    },
+    render: function() {
+        var width = this.defaults.width - this.defaults.margin.left - this.defaults.margin.right,
+            height = this.defaults.height - this.defaults.margin.top - this.defaults.margin.bottom;
+
+        var formatPercent = d3.format(",.0f");
+        var color = d3.scale.category20c();
+
+        var x = d3.scale.ordinal()
+            .rangeRoundBands([0, width], .1);
+
+        var colorScale = d3.scale.quantize()
+                .domain([1, 6000])
+                .range(colorbrewer.RdYlGn[9]);
+
+        var y = d3.scale.linear()
+            .range([height, 0]);
+
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient("bottom");
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient("left")
+            .tickFormat(formatPercent);
+
+        var svg = d3.select(this.el).append("svg")
+            .attr("width", width + this.defaults.margin.left + this.defaults.margin.right)
+            .attr("height", height + this.defaults.margin.top + this.defaults.margin.bottom)
+          .append("g")
+            .attr("transform", "translate(" + this.defaults.margin.left + "," + this.defaults.margin.top + ")");
+
+          x.domain(data.map(function(d) { return d.length; }));
+          y.domain([0, d3.max(data, function(d) { return d.frequency; })]);
+
+          svg.append("g")
+              .attr("class", "x axis")
+              .attr("transform", "translate(1," + height + ")")
+              .call(xAxis);
+
+          svg.append("g")
+              .attr("class", "y axis")
+              .call(yAxis)
+            .append("text")
+              .attr("transform", "rotate(-90)")
+              .attr("y", 6)
+              .attr("dy", ".71em")
+              .style("text-anchor", "end")
+              .text("# of deleted domains");
+          
+          //Common Model is used
+          svg.selectAll(".bar")
+              .data(chartModel.get('data'))
+            .enter().append("rect")
+              .attr("class", "bar")
+              .attr("x", function(d) {return x(d.length); })
+              .attr("width", x.rangeBand())
+              .attr("title", function(d) {return d.length + "(" + d.frequency + ")"; })
+              .attr("y", function(d) {return y(d.frequency); })
+              .attr("height", function(d) { console.log(height - y(d.frequency));return height - y(d.frequency); })
+              .transition().delay(function (d,i){ return i * 300;}).duration(300)
+              .style("fill", function(d) { return colorScale(d.frequency); });
+    },
+
+    type: function(d) {
+      d.frequency = +d.frequency;
+      return d;
+    }
+  });
+
+
+  new PieChart();
+  new BarChart();
+
+
+</script>
+</body>
