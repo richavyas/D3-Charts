@@ -1,0 +1,249 @@
+ /*!
+ * @d3-pie.js
+ *
+ * @author    Richa Vyas
+ *
+ */
+
+/** 
+    @namespace myproject.Directives.d3Pie
+*/
+
+'use strict';
+
+angular.module('myproject')
+    .directive('d3Pie', ['$timeout', 'ConfigService', '$window', '$filter', 'JSGradient',
+        function($timeout, configService, window, filter, jsGradient) {
+            return {
+                restrict: 'E',
+                templateUrl: 'partials/directives/d3-pie.html',
+                require: '^?report',
+                scope: {
+                    data: '=info',
+                    filters: '=filters'
+                },
+                link: function(scope, element, attr, parentController) {
+
+                    // variables
+                    var margin = 50,
+                        width = parseInt(element.find('.charting-component').width() - margin * 2),
+                        height = parseInt(element.find('.charting-component').height()),
+
+                        oWidth = width,
+                        oHeight = height,
+                        pieWidth = 0.65 * width,
+                        radius = Math.min(pieWidth, height) / 2,
+                        inited = false;
+
+                    scope.sliceHover = null;
+
+                    scope.dataset = [];
+                    scope.expanded = false;
+
+                    var parseData, init, render, update, zoomOut, hideHover, midAngle, hasChild;
+                    
+                    // D3 function variables
+                    var pie = d3.layout.pie().sort(null).value(function(d) {
+                            return d.value.Value;
+                        }),
+                        arc = d3.svg.arc()
+                        .outerRadius(radius * 0.8)
+                        .innerRadius(radius * 0.4),
+                        hoverArc = d3.svg.arc()
+                        .outerRadius(radius * 0.83)
+                        .innerRadius(radius * 0.4),
+                        outerArc = d3.svg.arc()
+                        .innerRadius(radius * 0.9)
+                        .outerRadius(radius * 0.9),
+                        key = function(d) {
+                            return d.data.label + d.data.value.Value + Math.random() * parseFloat(d.data.percentage) + Math.random() * d.data.value;
+                        },
+                        color = d3.scale.ordinal()
+                        .domain([array of categories])
+                        .range(configService.get('colors'));
+
+                    /**
+                        @function myproject.Directives.d3Pie.parseData
+
+                        @private
+
+                        @param {object} data
+
+                        @return {object}
+
+                        @desc parses data received from report directive
+                    */
+                    parseData = function(data) {
+                        for (var i = 0; i < data.length; i++) {
+                            data[i].color = color(i);
+                        }
+
+                        scope.legendsThresholdFlag = false;
+                        for (i = 0; i < data.length; i++)
+                            if (data[i].percentage < something) {
+                                scope.legendsThresholdFlag = true;
+                                break;
+                            }
+
+                        return data;
+                    };
+
+                    var bar = 0,
+                        svgAry = [];
+
+                    /**
+                        @event myproject.Directives.d3Pie.init
+
+                        @param {}
+
+                        @desc This function initiates and creates the SVG components and containers
+
+                        @returns {undefined}
+                    */
+                    init = function() {
+                        scope.drillDownDataStack = [];
+                        scope.drillDownDataStackLabel = ['Default'];
+                        scope.iOS = /(iPad|iPhone|iPod)/g.test( navigator.userAgent);            
+                        root = d3.select(element.find('.charting-component')[0])
+                            .append('svg')
+                            .attr('class', 'tacticvolume')
+                            .attr('height', '100%')
+                            .attr('width', '100%')
+                            .attr('viewBox', function(){
+                           
+                                if(scope.iOS == true && scope.expanded == false){
+                                    return '0 0 ' + Math.min(width, height) + ' ' + (Math.min(width, height) + 20);
+                                }else{
+                                    return '0 0 ' + Math.min(width, height) + ' ' + Math.min(width, height); 
+                                }
+                            })
+                    };
+
+                    /**
+                        @event myproject.Directives.d3Pie.render
+
+                        @param {object} dataset
+
+                        @param {string} parentElem
+
+                        @desc This function renders the SVG component with the data provided 'd'
+
+                        @returns {undefined}
+                    */
+                    render = function(d) {
+                    
+                        root.on('click', scope.toggleDataSet); 
+                        svg = root.append('g').attr('class', 'root');
+
+                        width = parseInt(element.find('.charting-component').width() - margin * 2);
+                        height = parseInt(element.find('.charting-component').height());
+
+                        svg.append('g').attr('class', 'circle');
+                        svg.append('g').attr('class', 'hoverSlice');
+                        svg.append('g').attr('class', 'slices');
+                        svg.append('g').attr('class', 'labels');
+                        svg.append('g').attr('class', 'lines');
+                        svg.append('g').attr('class', 'pointers');                       
+                      
+                        svg.attr('transform', function(){
+                            if(scope.iOS == false){
+                                return 'translate(' + Math.min(width, height) / 2 + ',' + Math.min(width, height) / 2 + ')';
+                            }else{
+                                return 'translate(' + Math.min(width, height) / 2 + ',' + (Math.min(width, height) / 2 + 20) + ')';                     
+                            }
+                        });
+                       
+                        var data = (d === undefined ? scope.data.data[0].TableJson : d);
+
+                        if (scope.data.sortData) {
+                            data = data.sort(function(a, b) {
+                                return parseFloat(a.value.Value) - parseFloat(b.value.Value);
+                            });
+                        }
+
+                        if (scope.data.createColorSet) {
+                            color = d3.scale.ordinal()
+                                .domain([0, data.length])
+                                .range(jsGradient.generateGradient(scope.data.colors[0], scope.data.colors[1], data.length + 1));
+                        } else {
+                            color = d3.scale.ordinal()
+                                .domain([0, data.length])
+                                .range(scope.data.colors);
+                        }
+
+                        /* check for redraw or fresh draw */
+                        scope.dataset = parseData(data);
+                    };
+
+                    /**
+                        @event myproject.Directives.d3Pie.pieTween
+
+                        @param {}
+
+                        @desc This function positions arcs' start and end angle (Interpolate the arcs in data space)
+
+                        @returns {undefined}
+                    */
+                    var oldPieData = '';
+
+                    var pieTween = function(d, i){
+                        var that = this;
+
+                        var theOldDataInPie = oldPieData;
+
+                        var s0;
+                        var e0;
+
+                        if(theOldDataInPie[i]){
+                            s0 = theOldDataInPie[i].startAngle;
+                            e0 = theOldDataInPie[i].endAngle;
+                        } else if (!(theOldDataInPie[i]) && theOldDataInPie[i-1]) {
+                            s0 = theOldDataInPie[i-1].endAngle;
+                            e0 = theOldDataInPie[i-1].endAngle;
+                        } else if(!(theOldDataInPie[i-1]) && theOldDataInPie.length > 0){
+                            s0 = theOldDataInPie[theOldDataInPie.length-1].endAngle;
+                            e0 = theOldDataInPie[theOldDataInPie.length-1].endAngle;
+                        } else {
+                            s0 = 0;
+                            e0 = 0;
+                        }
+
+                        var i = d3.interpolate({startAngle: s0, endAngle: e0}, {startAngle: d.startAngle, endAngle: d.endAngle});
+
+                        return function(t) {
+                            var b = i(t);
+                            return arc(b);
+                        };
+                    };
+
+                    /**
+                        init is triggered on page load
+                    */
+                    init();
+
+                    /**
+                        @event myproject.Directives.d3Pie.$watch
+
+                        @param {}
+
+                        @desc This function is triggered on update of data, binds D3 and renders chart.
+
+                        @returns {}
+                    */
+                    scope.$watch('data', function(newValue, oldValue) {                          
+                        if (newValue) {
+                            var data = scope.data.data[0].TableJson;
+                            var parentElem = 'something';
+                            render();
+                            if (scope.expanded) {
+                                something...
+                            } else {
+                                something else...
+                                };
+                            }
+                        }
+                    });
+                }
+            };
+        }
+    ]);
